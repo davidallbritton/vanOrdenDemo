@@ -1,0 +1,651 @@
+<!doctype html><html><head><meta charset=utf8><meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover"><style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#fff;color:#000}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style></head><body>
+<title>Homophone Categorization</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600&family=IBM+Plex+Sans:ital,wght@0,400;0,500;0,600;1,400&family=IBM+Plex+Serif:wght@500;600&display=swap">
+<style>
+/* Layout: one narrow column; a dark display panel is the stage, data below it. */
+:root {
+  --bg: #f2f3f1;
+  --surface: #ffffff;
+  --ink: #1e2223;
+  --muted: #5b6264;
+  --line: #d5d8d5;
+  --accent: #1d5a86;
+  --accent-soft: #e3edf5;
+  --hom: #b0541f;
+  --ctl: #1d5a86;
+  --ok: #2b7a4b;
+  --bad: #b13a2f;
+  --panel-bg: #14181a;
+  --panel-edge: #2c3337;
+  --panel-fg: #ebe7dc;
+  --panel-dim: #8b9190;
+  --panel-key: #232a2d;
+  --panel-key-edge: #3c4549;
+  --font-display: "IBM Plex Serif", Georgia, serif;
+  --font-body: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, Menlo, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #131617; --surface: #1b1f21; --ink: #e3e6e3; --muted: #9ca2a1; --line: #2e3437;
+    --accent: #84b6dc; --accent-soft: #1f2f3b; --hom: #f0a06c; --ctl: #84b6dc;
+    --ok: #6cc48f; --bad: #ee8076;
+    --panel-bg: #0b0d0e; --panel-edge: #2e3437;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #131617; --surface: #1b1f21; --ink: #e3e6e3; --muted: #9ca2a1; --line: #2e3437;
+  --accent: #84b6dc; --accent-soft: #1f2f3b; --hom: #f0a06c; --ctl: #84b6dc;
+  --ok: #6cc48f; --bad: #ee8076;
+  --panel-bg: #0b0d0e; --panel-edge: #2e3437;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body {
+  background: var(--bg); color: var(--ink);
+  font: 16px/1.55 var(--font-body);
+  padding-inline: 16px; padding-block: 28px 56px;
+}
+main { max-width: 760px; margin: 0 auto; display: grid; gap: 36px; }
+h1, h2, h3 { font-family: var(--font-display); font-weight: 600; text-wrap: balance; margin: 0; line-height: 1.2; }
+h1 { font-size: 2rem; }
+h2 { font-size: 1.35rem; }
+h3 { font-size: 1.05rem; }
+p { margin: 0; max-width: 66ch; }
+.eyebrow { font: 500 0.75rem/1.2 var(--font-mono); letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); }
+.stack { display: grid; gap: 12px; }
+.cite { font-size: 0.92rem; color: var(--muted); }
+.cite a { color: var(--accent); }
+.finding { border-left: 3px solid var(--accent); padding-left: 14px; }
+.sc { font-variant: small-caps; letter-spacing: 0.03em; }
+.mono { font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
+.note { font-size: 0.85rem; color: var(--muted); }
+
+.controls { display: flex; flex-wrap: wrap; gap: 14px 22px; align-items: end; }
+.field { display: grid; gap: 4px; min-width: 0; }
+.field label { font-size: 0.85rem; color: var(--muted); }
+select {
+  font: 1rem var(--font-body); color: var(--ink); background: var(--surface);
+  border: 1px solid var(--line); border-radius: 4px; padding: 7px 9px; max-width: 100%;
+}
+button {
+  font: 500 0.95rem var(--font-body); border-radius: 4px; padding: 9px 16px; cursor: pointer;
+  border: 1px solid var(--line); background: var(--surface); color: var(--ink);
+}
+button.primary { background: var(--accent); border-color: var(--accent); color: var(--bg); }
+button:disabled { opacity: 0.45; cursor: default; }
+button:focus-visible, select:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+/* The display panel keeps its dark look in both themes */
+.panel {
+  background: var(--panel-bg); border: 1px solid var(--panel-edge); border-radius: 8px;
+  padding: 14px 16px 18px; display: grid; gap: 12px; color: var(--panel-fg);
+}
+.panel-bar { display: flex; justify-content: space-between; gap: 12px; font: 0.8rem var(--font-mono); color: var(--panel-dim); letter-spacing: 0.04em; }
+.screen { min-height: 9rem; display: grid; place-items: center; text-align: center; }
+.screen .cat { font: 600 1.6rem/1.25 var(--font-body); letter-spacing: 0.04em; color: var(--panel-fg); }
+.screen .fix { font: 400 2.6rem/1 var(--font-mono); color: var(--panel-dim); }
+.screen .target { font: 600 3.4rem/1 var(--font-mono); letter-spacing: 0.08em; color: #ffd38a; }
+.screen .msg { font: 500 1.3rem/1.35 var(--font-body); color: var(--panel-fg); max-width: 34ch; }
+.prompt { min-height: 1.6em; text-align: center; font-size: 1rem; color: #d9d3c4; }
+.prompt.ok { color: #7fd6a0; }
+.prompt.bad { color: #ff9b8f; }
+.prompt.slow { color: #ffd38a; }
+.respond { display: flex; justify-content: center; gap: 12px; flex-wrap: wrap; }
+.respond button { min-width: 9rem; padding: 12px 18px; background: var(--panel-key); color: var(--panel-fg); border-color: var(--panel-key-edge); font-size: 1rem; touch-action: manipulation; }
+.respond button kbd { font: 0.8rem var(--font-mono); color: var(--panel-dim); margin-left: 6px; }
+.panel-foot { display: flex; justify-content: space-between; gap: 10px; flex-wrap: wrap; font-size: 0.8rem; color: var(--panel-dim); }
+.panel-foot button { padding: 5px 12px; font-size: 0.85rem; background: transparent; color: var(--panel-fg); border-color: var(--panel-key-edge); }
+
+/* Data */
+.chart-wrap { background: var(--surface); border: 1px solid var(--line); border-radius: 6px; padding: 10px 8px 6px; }
+.chart-wrap svg { display: block; width: 100%; height: auto; }
+.legend { display: flex; flex-wrap: wrap; gap: 6px 18px; font-size: 0.82rem; color: var(--muted); padding: 6px 8px 4px; }
+.legend span { display: inline-flex; align-items: center; gap: 6px; }
+.table-scroll { overflow-x: auto; border: 1px solid var(--line); border-radius: 6px; background: var(--surface); }
+table { border-collapse: collapse; width: 100%; font-size: 0.88rem; font-variant-numeric: tabular-nums; }
+th, td { padding: 6px 10px; text-align: right; white-space: nowrap; border-bottom: 1px solid var(--line); }
+th { font: 500 0.75rem var(--font-mono); text-transform: uppercase; letter-spacing: 0.05em; color: var(--muted); background: var(--bg); }
+td.l, th.l { text-align: left; }
+tbody tr:last-child td { border-bottom: 0; }
+.okc { color: var(--ok); }
+.err { color: var(--bad); font-weight: 600; }
+.slowc { color: var(--muted); font-style: italic; }
+.empty { padding: 18px; color: var(--muted); font-size: 0.93rem; text-align: center; }
+.data-actions { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+.confirm { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; font-size: 0.9rem; }
+.confirm .danger { background: var(--bad); border-color: var(--bad); color: var(--bg); }
+.diff-list { margin: 0; padding-left: 1.2em; display: grid; gap: 8px; max-width: 66ch; }
+textarea#csvBox { width: 100%; min-height: 8rem; font: 0.8rem var(--font-mono); background: var(--surface); color: var(--ink); border: 1px solid var(--line); border-radius: 4px; padding: 8px; }
+@media (max-width: 480px) {
+  h1 { font-size: 1.6rem; }
+  .screen .target { font-size: 2.6rem; }
+  .screen .cat { font-size: 1.3rem; }
+}
+</style>
+
+<main>
+  <header class="stack">
+    <div class="eyebrow">Classroom demonstration</div>
+    <h1>Word Identification From Spelling to Sound</h1>
+    <p class="cite">Van Orden, G. C., Johnston, J. C., &amp; Hale, B. L. (1988). Word identification in reading proceeds from spelling to sound to meaning. <i>Journal of Experimental Psychology: Learning, Memory, and Cognition, 14</i>(3), 371–386. <a href="https://doi.org/10.1037/0278-7393.14.3.371" target="_blank" rel="noopener">https://doi.org/10.1037/0278-7393.14.3.371</a></p>
+    <p>Each trial shows a category, such as <span class="sc">a part of the human body</span>, then a target. Decide as fast as you can whether the target is a member of the category. Some targets sound like a member but are spelled differently: <span class="sc">hare</span>, or the nonword <span class="sc">brane</span>. They are not members, so the answer is no. Knowing this does not make them easy to reject when you have to answer quickly. Try it.</p>
+  </header>
+
+  <section class="stack" aria-labelledby="runHead">
+    <h2 id="runHead">Run trials</h2>
+    <p>Press <b>F</b> for yes (a member of the category) and <b>J</b> for no, or tap the buttons. Answer before the deadline; a late answer counts as too slow. After an error you will see what the target sounded like.</p>
+    <div class="controls">
+      <div class="field">
+        <label for="runType">Run</label>
+        <select id="runType">
+          <option value="80">Full run (80 trials, about 6 min)</option>
+          <option value="40">Short run (40 trials, about 3 min)</option>
+          <option value="practice">Practice (12 trials, no sound-alikes)</option>
+        </select>
+      </div>
+      <div class="field">
+        <label for="deadline">Answer within</label>
+        <select id="deadline">
+          <option value="600">600 ms</option>
+          <option value="700">700 ms</option>
+          <option value="800" selected>800 ms</option>
+          <option value="1000">1000 ms</option>
+          <option value="1300">1300 ms</option>
+          <option value="0">No deadline</option>
+        </select>
+      </div>
+      <button class="primary" id="startBtn" type="button">Start</button>
+    </div>
+
+    <div class="panel">
+      <div class="panel-bar"><span id="progress">READY</span><span id="deadlineLabel"></span></div>
+      <div class="screen" id="screen"><span class="msg">Choose a run and press Start.</span></div>
+      <div class="prompt" id="prompt"></div>
+      <div class="respond">
+        <button type="button" id="yesBtn" disabled>Yes, a member<kbd>F</kbd></button>
+        <button type="button" id="noBtn" disabled>No<kbd>J</kbd></button>
+      </div>
+      <div class="panel-foot"><span>Category 2 s, then + for 0.5 s, then the target. Press Esc to stop.</span><button type="button" id="stopBtn" hidden>Stop</button></div>
+    </div>
+  </section>
+
+  <section class="stack" aria-labelledby="aboutHead">
+    <h2 id="aboutHead">What the demo shows</h2>
+    <p>In this task, “yes” means you have identified the target as a word whose meaning fits the category. A false “yes” to <span class="sc">hare</span> means the meaning of <span class="sc">hair</span> was activated, through the sound the two words share, strongly enough to drive the response before the spelling was checked. Compare your false “yes” rate for sound-alikes with the rate for spelling controls such as <span class="sc">harp</span> and <span class="sc">surt</span>, which are just as close in spelling to a category member but do not sound like one.</p>
+    <p class="finding">Van Orden and colleagues found false “yes” rates of about 21% for word homophones like <span class="sc">hare</span> and for nonword homophones like <span class="sc">sute</span>, against about 3% for their spelling controls. The nonword result is the key one: <span class="sc">sute</span> has no stored pronunciation to look up, so its sound must have been computed from its letters, and that computed sound reached the meaning of <span class="sc">suit</span>. Word and nonword homophones were equally error-prone in both experiments, so a stored pronunciation of <span class="sc">hare</span> added nothing. They concluded that readers compute sound from spelling as part of identifying printed words, not only after a word is identified.</p>
+    <p>One caution for this demo: every nonword needs a “no,” so you can reject <span class="sc">sute</span> by noticing it is not a word, without thinking about meaning at all. Real-word sound-alikes like <span class="sc">hare</span> and <span class="sc">rows</span> block that shortcut, which is why most of the sound-alikes here are words.</p>
+  </section>
+
+  <section class="stack" aria-labelledby="dataHead">
+    <h2 id="dataHead">Your data from this session</h2>
+    <p class="note">Your trials stay in this page only. Nothing is saved; reloading or closing the page erases them. Practice trials are listed but left out of the summary. Rates use trials answered before the deadline; too-slow trials are counted separately.</p>
+    <div class="chart-wrap">
+      <div id="chart"></div>
+      <div class="legend" id="legend"></div>
+    </div>
+    <div class="table-scroll" id="summary"></div>
+    <p class="note">Van Orden et al.’s rates come from runs without a deadline: subjects were asked to be fast and accurate (Experiment 1), or accurate but very fast (Experiment 2). Experiment 2 had no spelling controls. Your deadline makes errors more likely, so expect higher rates for every type.</p>
+    <h3>All trials</h3>
+    <div class="table-scroll" id="trials"></div>
+    <div class="data-actions">
+      <button type="button" id="copyBtn">Copy data as CSV</button>
+      <span id="clearWrap"></span>
+      <span class="note" id="copyMsg" role="status"></span>
+    </div>
+    <textarea id="csvBox" hidden readonly aria-label="CSV data"></textarea>
+  </section>
+
+  <section class="stack" aria-labelledby="diffHead">
+    <div><button type="button" id="diffBtn" aria-expanded="false" aria-controls="diffText">How this demo differs from Van Orden et al.’s experiments</button></div>
+    <div class="stack" id="diffText" hidden>
+      <h2 id="diffHead">How this demo differs from Van Orden et al.’s experiments</h2>
+      <ul class="diff-list">
+        <li>Their subjects did not know the study was about sound-alikes. You do, so the demo adds a response deadline to keep errors possible, and shows feedback after each error. Their subjects had no deadline and the paper does not describe trial-by-trial feedback.</li>
+        <li>About 30% of trials here are sound-alikes or spelling controls, and most sound-alikes are real words. In their Experiment 1, 10% of trials were sound-alikes (half words, half nonwords) and another 10% were spelling controls.</li>
+        <li>Sound-alikes and spelling controls come from their Appendix A (Experiment 1) and Appendix C (Experiment 2). Five more word sound-alikes with spelling controls were written for this demo (<span class="sc">pair/peak</span>, <span class="sc">knows/knots</span>, <span class="sc">waste/waits</span>, <span class="sc">blew/blow</span>, <span class="sc">sun/sin</span>) and are marked “added” in the trial table. The category members and unrelated “no” words were also written for this demo; theirs came from published category norms.</li>
+        <li>Each of their subjects saw every sound-alike and every spelling control. Here a run never shows a sound-alike together with its own spelling control, or with the category member it sounds like, and new runs use items you have not seen until the pool runs out.</li>
+        <li>Their sessions had 40 practice trials and 200 test trials (about 45 min), and subjects answered by pulling levers. With 5–10 trials per type in a run, your percentages will move a lot from run to run.</li>
+      </ul>
+    </div>
+  </section>
+</main>
+
+<script>
+(() => {
+  const $ = id => document.getElementById(id);
+
+  // ---------- Materials ----------
+  // Sound-alike items: category, sound-alike (hom), the member it sounds like (ex), spelling control (ctl), source.
+  const ITEMS = [
+    // Appendix A, Experiment 1: nonword homophones and spelling controls
+    ["A VEGETABLE", "KARRET", "CARROT", "PARRIT", "nonword", "Exp 1"],
+    ["A FOUR-FOOTED ANIMAL", "SHEAP", "SHEEP", "SHELP", "nonword", "Exp 1"],
+    ["A TREE", "OKE", "OAK", "ONK", "nonword", "Exp 1"],
+    ["A PART OF THE HUMAN BODY", "BRANE", "BRAIN", "BLAIN", "nonword", "Exp 1"],
+    ["AN ARTICLE OF CLOTHING", "SHURT", "SHIRT", "SHART", "nonword", "Exp 1"],
+    ["A WEATHER PHENOMENON", "HEET", "HEAT", "HERT", "nonword", "Exp 1"],
+    ["A VEHICLE", "JEAP", "JEEP", "JELP", "nonword", "Exp 1"],
+    ["AN ARTICLE OF CLOTHING", "SUTE", "SUIT", "SURT", "nonword", "Exp 1"],
+    ["A WEATHER PHENOMENON", "SLEAT", "SLEET", "SCEET", "nonword", "Exp 1"],
+    ["A KITCHEN UTENSIL", "BOLE", "BOWL", "BOLB", "nonword", "Exp 1"],
+    // Appendix A, Experiment 1: word homophones and spelling controls
+    ["A PART OF A BUILDING", "SELLER", "CELLAR", "TELLER", "word", "Exp 1"],
+    ["A PART OF A BUILDING", "STARE", "STAIR", "START", "word", "Exp 1"],
+    ["A NON-ALCOHOLIC BEVERAGE", "TEE", "TEA", "TEN", "word", "Exp 1"],
+    ["A CARPENTER'S TOOL", "PLAIN", "PLANE", "PLACE", "word", "Exp 1"],
+    ["A METAL", "STEAL", "STEEL", "STEEP", "word", "Exp 1"],
+    ["A FOUR-FOOTED ANIMAL", "BARE", "BEAR", "BEER", "word", "Exp 1"],
+    ["A FOUR-FOOTED ANIMAL", "DEAR", "DEER", "DYER", "word", "Exp 1"],
+    ["A PART OF THE HUMAN BODY", "HARE", "HAIR", "HARP", "word", "Exp 1"],
+    ["A VEGETABLE", "BEATS", "BEETS", "BELTS", "word", "Exp 1"],
+    ["A COLOR", "ROWS", "ROSE", "ROBS", "word", "Exp 1"],
+    // Appendix C, Experiment 2: nonword homophones (no spelling controls)
+    ["A TYPE OF GRAIN", "WHEET", "WHEAT", null, "nonword", "Exp 2"],
+    ["A BIRD", "CROE", "CROW", null, "nonword", "Exp 2"],
+    ["A KIND OF MEAT", "BEAF", "BEEF", null, "nonword", "Exp 2"],
+    ["CARPENTER'S GEAR", "NALE", "NAIL", null, "nonword", "Exp 2"],
+    ["A WEATHER PHENOMENON", "HAYLE", "HAIL", null, "nonword", "Exp 2"],
+    ["PART OF A SHIP", "KEAL", "KEEL", null, "nonword", "Exp 2"],
+    ["A BODY OF WATER", "CREKE", "CREEK", null, "nonword", "Exp 2"],
+    ["A PLACE OF CONFINEMENT", "JALE", "JAIL", null, "nonword", "Exp 2"],
+    ["THINGS IN A WOMAN'S PURSE", "KEE", "KEY", null, "nonword", "Exp 2"],
+    ["ANIMAL SOUNDS", "RORE", "ROAR", null, "nonword", "Exp 2"],
+    // Appendix C, Experiment 2: word homophones (no spelling controls)
+    ["A PART OF A BICYCLE", "BREAK", "BRAKE", null, "word", "Exp 2"],
+    ["AN INSECT", "FLEE", "FLEA", null, "word", "Exp 2"],
+    ["PART OF A PERSON'S FOOT", "HEAL", "HEEL", null, "word", "Exp 2"],
+    ["BEACH GEAR", "PALE", "PAIL", null, "word", "Exp 2"],
+    ["PART OF A LION'S BODY", "PAUSE", "PAWS", null, "word", "Exp 2"],
+    ["FISHING GEAR", "REAL", "REEL", null, "word", "Exp 2"],
+    ["A KIND OF MEAT", "STAKE", "STEAK", null, "word", "Exp 2"],
+    ["PART OF A LION'S BODY", "TALE", "TAIL", null, "word", "Exp 2"],
+    ["A BODY OF WATER", "SEE", "SEA", null, "word", "Exp 2"],
+    ["PART OF A SHIP", "SALE", "SAIL", null, "word", "Exp 2"],
+    // Added for this demo: word homophones with spelling controls
+    ["A FRUIT", "PAIR", "PEAR", "PEAK", "word", "added"],
+    ["A PART OF THE FACE", "KNOWS", "NOSE", "KNOTS", "word", "added"],
+    ["A PART OF THE HUMAN BODY", "WASTE", "WAIST", "WAITS", "word", "added"],
+    ["A COLOR", "BLEW", "BLUE", "BLOW", "word", "added"],
+    ["A FAMILY MEMBER", "SUN", "SON", "SIN", "word", "added"]
+  ].map(([cat, hom, ex, ctl, lex, src], id) => ({ id, cat, hom, ex, ctl, lex, src }));
+
+  // Category members for "yes" trials (written for this demo).
+  const BANK = {
+    "A VEGETABLE": "PEAS BEANS LETTUCE SPINACH CELERY ONION POTATO CABBAGE BROCCOLI",
+    "A FOUR-FOOTED ANIMAL": "HORSE DOG CAT COW LION TIGER GOAT ZEBRA MOUSE",
+    "A TREE": "MAPLE PINE ELM BIRCH WILLOW CEDAR PALM SPRUCE",
+    "A PART OF THE HUMAN BODY": "ARM LEG HAND FOOT KNEE ELBOW SHOULDER TOOTH FINGER",
+    "AN ARTICLE OF CLOTHING": "DRESS PANTS SOCKS SKIRT JACKET SWEATER COAT BLOUSE VEST",
+    "A WEATHER PHENOMENON": "RAIN SNOW FOG WIND THUNDER LIGHTNING TORNADO HURRICANE",
+    "A VEHICLE": "CAR TRUCK BUS TRAIN VAN TAXI BICYCLE MOTORCYCLE",
+    "A KITCHEN UTENSIL": "SPOON FORK KNIFE LADLE SPATULA WHISK PAN POT",
+    "A PART OF A BUILDING": "ROOF WALL FLOOR DOOR WINDOW CEILING ATTIC CHIMNEY HALLWAY",
+    "A NON-ALCOHOLIC BEVERAGE": "MILK JUICE COFFEE SODA WATER LEMONADE COCOA",
+    "A CARPENTER'S TOOL": "HAMMER SAW DRILL CHISEL SCREWDRIVER RULER CLAMP",
+    "A METAL": "IRON GOLD SILVER COPPER TIN ZINC BRASS ALUMINUM",
+    "A COLOR": "RED GREEN YELLOW ORANGE PURPLE BROWN PINK BLACK",
+    "A TYPE OF GRAIN": "CORN OATS RICE BARLEY RYE",
+    "A BIRD": "ROBIN PIGEON EAGLE SPARROW HAWK OWL PARROT DUCK",
+    "A KIND OF MEAT": "VEAL PORK HAM LAMB BACON CHICKEN TURKEY",
+    "CARPENTER'S GEAR": "SCREW HAMMER SAW DRILL GLUE LADDER CLAMP",
+    "PART OF A SHIP": "RUDDER MAST DECK ANCHOR HULL CABIN PROPELLER",
+    "A BODY OF WATER": "STREAM LAKE RIVER POND OCEAN BAY LAGOON",
+    "A PLACE OF CONFINEMENT": "CELL PRISON CAGE DUNGEON PEN",
+    "THINGS IN A WOMAN'S PURSE": "COMB WALLET LIPSTICK MIRROR TISSUES PHONE BRUSH",
+    "ANIMAL SOUNDS": "BARK MOO MEOW HOWL GROWL HISS CHIRP QUACK",
+    "A PART OF A BICYCLE": "TIRE PEDAL CHAIN SEAT SPOKE WHEEL HANDLEBAR",
+    "AN INSECT": "ANT BEE FLY MOTH BEETLE WASP CRICKET GNAT",
+    "PART OF A PERSON'S FOOT": "TOE ARCH ANKLE INSTEP TOENAIL",
+    "BEACH GEAR": "BLANKET TOWEL UMBRELLA SHOVEL SUNSCREEN SANDALS SUNGLASSES",
+    "PART OF A LION'S BODY": "FUR MANE CLAWS TEETH WHISKERS EARS",
+    "FISHING GEAR": "POLE ROD HOOK LINE NET BAIT LURE BOBBER",
+    "A FRUIT": "APPLE BANANA GRAPE PEACH PLUM CHERRY LEMON MANGO",
+    "A PART OF THE FACE": "EYE MOUTH CHIN CHEEK LIPS EYEBROW FOREHEAD",
+    "A FAMILY MEMBER": "MOTHER FATHER SISTER BROTHER AUNT UNCLE COUSIN DAUGHTER"
+  };
+  for (const k in BANK) BANK[k] = BANK[k].split(" ");
+  // Unrelated "no" words: not members of any category used here.
+  const UNRELATED = ("VIOLIN PIANO TRUMPET DRUM FLUTE GUITAR SOFA CRADLE PILLOW CANDLE PUZZLE BALLOON " +
+    "GLOBE CALENDAR TROPHY STATUE PLANET COMET DIAMOND MARBLE ALPHABET SENTENCE POEM RIDDLE CIRCLE " +
+    "TRIANGLE CHESS SOCCER TENNIS BALLET OPERA HOLIDAY BIRTHDAY MONDAY OCTOBER CRAYON").split(" ");
+
+  const TYPES = {
+    wordHom: { label: "Word sound-alike", eg: "HARE", ref1: 21.8, ref2: 32.8, kind: "hom" },
+    wordCtl: { label: "Word spelling control", eg: "HARP", ref1: 2.3, ref2: null, kind: "ctl" },
+    nonHom: { label: "Nonword sound-alike", eg: "SUTE", ref1: 21.3, ref2: 32.5, kind: "hom" },
+    nonCtl: { label: "Nonword spelling control", eg: "SURT", ref1: 3.0, ref2: null, kind: "ctl" },
+    filler: { label: "Unrelated word", eg: "VIOLIN", ref1: 3.0, ref2: null, kind: "filler" },
+    member: { label: "Category member", eg: "DRESS", ref1: null, ref2: null, kind: "member" }
+  };
+  const FOIL_ORDER = ["wordHom", "wordCtl", "nonHom", "nonCtl", "filler"];
+  const SIZES = {
+    80: { wordHom: 10, wordCtl: 5, nonHom: 5, nonCtl: 4, filler: 16, member: 40 },
+    40: { wordHom: 5, wordCtl: 3, nonHom: 3, nonCtl: 2, filler: 7, member: 20 }
+  };
+
+  // ---------- State ----------
+  const data = [];
+  const usedItems = new Set();   // sound-alike items already shown this session
+  let runCount = 0;
+  let run = null;
+  let respond = null;
+
+  const shuffle = a => { for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; };
+  const fmt = (x, d = 0) => Number.isFinite(x) ? x.toFixed(d) : "–";
+  const lc = s => s.toLowerCase().replace("'s", "’s");
+  // Take k items, preferring ones not yet used this session.
+  function takePreferUnused(pool, k) {
+    const fresh = shuffle(pool.filter(i => !usedItems.has(i.id)));
+    const old = shuffle(pool.filter(i => usedItems.has(i.id)));
+    return fresh.concat(old).slice(0, k);
+  }
+
+  function buildRun(size) {
+    const n = SIZES[size];
+    const words = ITEMS.filter(i => i.lex === "word"), nons = ITEMS.filter(i => i.lex === "nonword");
+    // Pick control items first, then sound-alikes from the remaining items,
+    // so a run never contains a sound-alike together with its own control.
+    const wCtl = takePreferUnused(words.filter(i => i.ctl), n.wordCtl);
+    const wHom = takePreferUnused(words.filter(i => !wCtl.includes(i)), n.wordHom);
+    const nCtl = takePreferUnused(nons.filter(i => i.ctl), n.nonCtl);
+    const nHom = takePreferUnused(nons.filter(i => !nCtl.includes(i)), n.nonHom);
+    [...wCtl, ...wHom, ...nCtl, ...nHom].forEach(i => usedItems.add(i.id));
+    const trials = [
+      ...wHom.map(i => ({ type: "wordHom", cat: i.cat, target: i.hom, like: i.ex, src: i.src })),
+      ...wCtl.map(i => ({ type: "wordCtl", cat: i.cat, target: i.ctl, like: i.ex, src: i.src })),
+      ...nHom.map(i => ({ type: "nonHom", cat: i.cat, target: i.hom, like: i.ex, src: i.src })),
+      ...nCtl.map(i => ({ type: "nonCtl", cat: i.cat, target: i.ctl, like: i.ex, src: i.src }))
+    ];
+    // Members of the same categories, so a category never signals "no".
+    // Leave out every word a sound-alike in this run is meant to resemble.
+    const banned = new Set([...wCtl, ...wHom, ...nCtl, ...nHom].map(i => i.ex));
+    const cats = shuffle([...new Set(trials.map(t => t.cat))]);
+    const usedWords = new Set(trials.map(t => t.target));
+    let ci = 0, guard = 0;
+    while (trials.filter(t => t.type === "member").length < n.member && guard++ < 1000) {
+      const cat = cats[ci++ % cats.length];
+      const options = BANK[cat].filter(w => !banned.has(w) && !usedWords.has(w));
+      if (!options.length) continue;
+      const w = options[Math.floor(Math.random() * options.length)];
+      usedWords.add(w);
+      trials.push({ type: "member", cat, target: w, like: "", src: "demo" });
+    }
+    const unrelated = shuffle(UNRELATED.slice()).slice(0, n.filler);
+    unrelated.forEach((w, k) => trials.push({ type: "filler", cat: cats[k % cats.length], target: w, like: "", src: "demo" }));
+    return shuffle(trials);
+  }
+  function buildPractice() {
+    const cats = shuffle(Object.keys(BANK)).slice(0, 12);
+    const unrelated = shuffle(UNRELATED.slice());
+    return cats.map((cat, k) => k % 2 === 0
+      ? { type: "member", cat, target: BANK[cat][Math.floor(Math.random() * BANK[cat].length)], like: "", src: "demo" }
+      : { type: "filler", cat, target: unrelated[k], like: "", src: "demo" });
+  }
+
+  // ---------- Running ----------
+  class Stopped extends Error {}
+  const wait = ms => new Promise((res, rej) => { run.pending = rej; run.timers.push(setTimeout(res, ms)); });
+  const screen = html => { $("screen").innerHTML = html; };
+  const say = (t, cls = "") => { $("prompt").textContent = t; $("prompt").className = "prompt " + cls; };
+
+  function getResponse(deadline) {
+    return new Promise((res, rej) => {
+      run.pending = rej;
+      $("yesBtn").disabled = $("noBtn").disabled = false;
+      requestAnimationFrame(() => {
+        const t0 = performance.now();
+        let timer = null;
+        const finish = (r, rt) => {
+          respond = null; clearTimeout(timer);
+          $("yesBtn").disabled = $("noBtn").disabled = true;
+          res({ r, rt });
+        };
+        respond = r => finish(r, Math.round(performance.now() - t0));
+        if (deadline) { timer = setTimeout(() => finish(null, null), deadline); run.timers.push(timer); }
+      });
+    });
+  }
+
+  async function countdown() {
+    $("progress").textContent = "GET READY";
+    screen(`<span class="msg">Get ready</span>`);
+    say("Rest your left index finger on F (yes) and your right index finger on J (no).");
+    await wait(2500);
+    for (const c of ["3", "2", "1"]) { screen(`<span class="target">${c}</span>`); await wait(1000); }
+    screen(""); say("");
+    await wait(600);
+  }
+
+  async function runTrials(trials, practice, deadline) {
+    const runNo = ++runCount;
+    await countdown();
+    for (let i = 0; i < trials.length; i++) {
+      const t = trials[i];
+      $("progress").textContent = `${practice ? "PRACTICE " : ""}TRIAL ${i + 1} OF ${trials.length}`;
+      screen(""); say("");
+      await wait(500);
+      screen(`<span class="cat">${t.cat}</span>`);
+      await wait(2000);
+      screen(`<span class="fix">+</span>`);
+      await wait(500);
+      screen(`<span class="target">${t.target}</span>`);
+      const { r, rt } = await getResponse(deadline);
+      const answer = t.type === "member" ? "yes" : "no";
+      const tooSlow = r === null;
+      const correct = !tooSlow && r === answer;
+      data.push({ run: runNo, practice, trial: i + 1, deadline: deadline || null, ...t, answer, response: r, correct, tooSlow, rt });
+      render();
+      screen("");
+      if (tooSlow) {
+        say("Too slow", "slow");
+        await wait(1000);
+      } else if (correct) {
+        say(`Correct · ${rt} ms`, "ok");
+        await wait(700);
+      } else {
+        let msg;
+        const cat = `“${lc(t.cat)}”`;
+        if (answer === "yes") msg = `${t.target} does belong in ${cat}.`;
+        else if (t.type === "wordHom" || t.type === "nonHom") msg = `${t.target} sounds like ${t.like}, but it does not belong in ${cat}.`;
+        else msg = `${t.target} does not belong in ${cat}.`;
+        screen(`<span class="msg">${msg}</span>`);
+        say(`Error · ${rt} ms`, "bad");
+        await wait(2400);
+      }
+    }
+  }
+
+  async function start() {
+    if (run) return;
+    const choice = $("runType").value;
+    const deadline = Number($("deadline").value);
+    const practice = choice === "practice";
+    const trials = practice ? buildPractice() : buildRun(Number(choice));
+    run = { timers: [], pending: null };
+    setRunning(true);
+    try {
+      await runTrials(trials, practice, deadline);
+      $("progress").textContent = "DONE";
+      screen(`<span class="msg">Finished</span>`);
+      say(practice ? "Practice done. Choose a full or short run and press Start." : "Your results are below. Press Start for another run with new items.");
+    } catch (e) {
+      if (!(e instanceof Stopped)) throw e;
+      $("progress").textContent = "STOPPED";
+      screen(`<span class="msg">Stopped</span>`);
+      say("Trials you completed are kept below.");
+    } finally {
+      run = null; respond = null;
+      setRunning(false);
+    }
+  }
+  function stop() {
+    if (!run) return;
+    run.timers.forEach(clearTimeout);
+    respond = null;
+    if (run.pending) run.pending(new Stopped());
+  }
+  function setRunning(on) {
+    $("startBtn").disabled = on;
+    $("runType").disabled = $("deadline").disabled = on;
+    $("stopBtn").hidden = !on;
+    $("yesBtn").disabled = $("noBtn").disabled = true;
+  }
+  function syncDeadline() {
+    const d = Number($("deadline").value);
+    $("deadlineLabel").textContent = d ? `DEADLINE ${d} MS` : "NO DEADLINE";
+  }
+
+  document.addEventListener("keydown", e => {
+    if (e.key === "Escape") { stop(); return; }
+    if (respond && !e.repeat && /^[fjFJ]$/.test(e.key)) { e.preventDefault(); respond(e.key.toLowerCase() === "f" ? "yes" : "no"); }
+  });
+  $("yesBtn").addEventListener("pointerdown", e => { e.preventDefault(); if (respond) respond("yes"); });
+  $("noBtn").addEventListener("pointerdown", e => { e.preventDefault(); if (respond) respond("no"); });
+  $("startBtn").addEventListener("click", start);
+  $("stopBtn").addEventListener("click", stop);
+  $("deadline").addEventListener("change", syncDeadline);
+
+  // ---------- Results ----------
+  function summarize() {
+    const recs = data.filter(r => !r.practice);
+    const out = {};
+    for (const type of Object.keys(TYPES)) {
+      const all = recs.filter(r => r.type === type);
+      const answered = all.filter(r => !r.tooSlow);
+      const yes = answered.filter(r => r.response === "yes").length;
+      const correctRts = answered.filter(r => r.correct).map(r => r.rt);
+      out[type] = {
+        n: all.length, answered: answered.length, slow: all.length - answered.length, yes,
+        rate: answered.length ? 100 * yes / answered.length : NaN,
+        se: answered.length ? 100 * Math.sqrt((yes / answered.length) * (1 - yes / answered.length) / answered.length) : NaN,
+        rt: correctRts.length ? correctRts.reduce((a, b) => a + b, 0) / correctRts.length : NaN
+      };
+    }
+    return out;
+  }
+  function chartSVG(s) {
+    const W = 640, H = 320, m = { l: 52, r: 16, t: 16, b: 62 };
+    const n = FOIL_ORDER.length;
+    const band = (W - m.l - m.r) / n;
+    const xs = k => m.l + band * (k + 0.5);
+    const top = 100;
+    const ys = v => m.t + (1 - v / top) * (H - m.t - m.b);
+    let g = "";
+    for (let v = 0; v <= top; v += 20) {
+      g += `<line x1="${m.l}" x2="${W - m.r}" y1="${ys(v)}" y2="${ys(v)}" stroke="var(--line)"/>`;
+      g += `<text x="${m.l - 8}" y="${ys(v) + 4}" text-anchor="end" font-size="12" fill="var(--muted)" font-family="var(--font-mono)">${v}%</text>`;
+    }
+    FOIL_ORDER.forEach((type, k) => {
+      const T = TYPES[type], c = s[type], x = xs(k);
+      const col = T.kind === "hom" ? "var(--hom)" : T.kind === "ctl" ? "var(--ctl)" : "var(--muted)";
+      const bw = Math.min(56, band * 0.5);
+      if (c.answered) {
+        g += `<rect x="${x - bw / 2}" y="${ys(c.rate)}" width="${bw}" height="${ys(0) - ys(c.rate)}" fill="${col}" opacity="0.85"/>`;
+        if (c.se > 0) {
+          const lo = Math.max(0, c.rate - c.se), hi = Math.min(100, c.rate + c.se);
+          g += `<line x1="${x}" x2="${x}" y1="${ys(lo)}" y2="${ys(hi)}" stroke="var(--ink)" stroke-width="1.5"/>`;
+          g += `<line x1="${x - 5}" x2="${x + 5}" y1="${ys(hi)}" y2="${ys(hi)}" stroke="var(--ink)" stroke-width="1.5"/>`;
+          g += `<line x1="${x - 5}" x2="${x + 5}" y1="${ys(lo)}" y2="${ys(lo)}" stroke="var(--ink)" stroke-width="1.5"/>`;
+        }
+        g += `<text x="${x}" y="${ys(c.rate) - 6}" text-anchor="middle" font-size="12" fill="var(--ink)" font-family="var(--font-mono)">${fmt(c.rate)}%</text>`;
+      }
+      if (T.ref1 !== null) g += `<path d="M ${x + bw / 2 + 10} ${ys(T.ref1) - 6} l 6 6 l -6 6 l -6 -6 z" fill="var(--surface)" stroke="var(--ink)" stroke-width="1.5"/>`;
+      if (T.ref2 !== null) g += `<path d="M ${x + bw / 2 + 10} ${ys(T.ref2) - 6} l 6 6 l -6 6 l -6 -6 z" fill="var(--ink)"/>`;
+      const words = T.label.split(" ");
+      const l1 = words.slice(0, Math.ceil(words.length / 2)).join(" "), l2 = words.slice(Math.ceil(words.length / 2)).join(" ");
+      g += `<text x="${x}" y="${H - m.b + 18}" text-anchor="middle" font-size="11.5" fill="var(--muted)">${l1}</text>`;
+      g += `<text x="${x}" y="${H - m.b + 32}" text-anchor="middle" font-size="11.5" fill="var(--muted)">${l2}</text>`;
+      g += `<text x="${x}" y="${H - m.b + 47}" text-anchor="middle" font-size="11" fill="var(--muted)" font-family="var(--font-mono)">${T.eg}</text>`;
+    });
+    g += `<text transform="translate(14 ${(m.t + H - m.b) / 2}) rotate(-90)" text-anchor="middle" font-size="12.5" fill="var(--muted)">False “yes” rate</text>`;
+    if (!data.some(r => !r.practice)) g += `<text x="${(m.l + W - m.r) / 2}" y="${m.t + 30}" text-anchor="middle" font-size="13.5" fill="var(--muted)">Your bars will appear here after a full or short run. Diamonds show Van Orden et al.’s rates.</text>`;
+    return `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="False yes rate by target type">${g}</svg>`;
+  }
+  function render() {
+    const s = summarize();
+    $("chart").innerHTML = chartSVG(s);
+    $("legend").innerHTML =
+      `<span><svg width="14" height="12"><rect width="14" height="12" fill="var(--hom)"/></svg>Your sound-alikes</span>` +
+      `<span><svg width="14" height="12"><rect width="14" height="12" fill="var(--ctl)"/></svg>Your spelling controls</span>` +
+      `<span><svg width="14" height="14"><path d="M 7 1 l 6 6 l -6 6 l -6 -6 z" fill="var(--surface)" stroke="var(--ink)" stroke-width="1.5"/></svg>Van Orden et al., Exp. 1</span>` +
+      `<span><svg width="14" height="14"><path d="M 7 1 l 6 6 l -6 6 l -6 -6 z" fill="var(--ink)"/></svg>Exp. 2 (faster responding)</span>` +
+      `<span>Bars: ±1 SE</span>`;
+
+    const rows = [...FOIL_ORDER, "member"];
+    if (!data.some(r => !r.practice)) {
+      $("summary").innerHTML = `<div class="empty">No full or short runs yet.</div>`;
+    } else {
+      $("summary").innerHTML = `<table><thead><tr><th class="l">Target type</th><th>Trials</th><th>Too slow</th><th>Answered</th><th>False “yes”</th><th>Exp. 1</th><th>Exp. 2</th><th>Correct RT (ms)</th></tr></thead><tbody>` +
+        rows.map(type => {
+          const T = TYPES[type], c = s[type];
+          const isMember = type === "member";
+          const rateCell = isMember
+            ? (c.answered ? `${fmt(100 - c.rate)}% missed` : "–")
+            : (c.answered ? `${c.yes} (${fmt(c.rate)}%)` : "–");
+          return `<tr><td class="l">${T.label} <span class="note mono">${T.eg}</span></td><td>${c.n}</td><td>${c.slow}</td><td>${c.answered}</td><td>${rateCell}</td><td>${T.ref1 === null ? "" : T.ref1.toFixed(1) + "%"}</td><td>${T.ref2 === null ? "" : T.ref2.toFixed(1) + "%"}</td><td>${fmt(c.rt)}</td></tr>`;
+        }).join("") +
+        `</tbody></table>`;
+    }
+
+    if (!data.length) {
+      $("trials").innerHTML = `<div class="empty">Each trial you complete will be listed here.</div>`;
+    } else {
+      $("trials").innerHTML = `<table><thead><tr><th>Run</th><th>Trial</th><th class="l">Category</th><th class="l">Target</th><th class="l">Type</th><th class="l">Sounds like / near</th><th class="l">Source</th><th class="l">You said</th><th>RT (ms)</th></tr></thead><tbody>` +
+        data.map(r => {
+          const said = r.tooSlow ? `<span class="slowc">too slow</span>` : `<span class="${r.correct ? "okc" : "err"}">${r.response}${r.correct ? "" : " ✗"}</span>`;
+          return `<tr><td>${r.run}${r.practice ? "p" : ""}</td><td>${r.trial}</td><td class="l">${lc(r.cat)}</td><td class="l mono">${r.target}</td><td class="l">${TYPES[r.type].label}</td><td class="l mono">${r.like}</td><td class="l">${r.src === "demo" ? "" : r.src}</td><td class="l">${said}</td><td>${r.rt ?? ""}</td></tr>`;
+        }).join("") + `</tbody></table>`;
+    }
+    $("copyBtn").disabled = !data.length;
+    const cb = $("clearBtn"); if (cb) cb.disabled = !data.length;
+  }
+
+  // ---------- CSV and clearing ----------
+  function csv() {
+    const q = s => `"${String(s).replace(/"/g, '""')}"`;
+    const head = "run,practice,trial,deadline_ms,category,target,type,sounds_like,source,correct_answer,response,correct,too_slow,rt_ms";
+    return [head, ...data.map(r => [r.run, r.practice ? 1 : 0, r.trial, r.deadline ?? "", q(r.cat), r.target, r.type, r.like, r.src, r.answer, r.response ?? "", r.correct ? 1 : 0, r.tooSlow ? 1 : 0, r.rt ?? ""].join(","))].join("\n");
+  }
+  $("copyBtn").addEventListener("click", () => {
+    const text = csv();
+    const fallback = () => {
+      const box = $("csvBox"); box.hidden = false; box.value = text; box.focus(); box.select();
+      $("copyMsg").textContent = "Copying was blocked. The data are selected in the box below; copy them with Ctrl+C or ⌘C.";
+    };
+    try {
+      navigator.clipboard.writeText(text).then(() => { $("copyMsg").textContent = `Copied ${data.length} trials. Paste into a spreadsheet or R.`; }, fallback);
+    } catch (e) { fallback(); }
+  });
+  function showClear() {
+    $("clearWrap").innerHTML = `<button type="button" id="clearBtn">Delete all trials</button>`;
+    $("clearBtn").disabled = !data.length;
+    $("clearBtn").addEventListener("click", () => {
+      $("clearWrap").innerHTML = `<span class="confirm">Delete all ${data.length} trials? <button type="button" class="danger" id="confirmDel">Delete</button><button type="button" id="cancelDel">Cancel</button></span>`;
+      $("confirmDel").addEventListener("click", () => {
+        data.length = 0; usedItems.clear(); runCount = 0;
+        $("csvBox").hidden = true; $("copyMsg").textContent = "All trials deleted.";
+        showClear(); render();
+      });
+      $("cancelDel").addEventListener("click", showClear);
+    });
+  }
+
+  $("diffBtn").addEventListener("click", () => {
+    const open = $("diffText").hidden;
+    $("diffText").hidden = !open;
+    $("diffBtn").setAttribute("aria-expanded", open);
+    $("diffBtn").textContent = open ? "Hide the differences" : "How this demo differs from Van Orden et al.’s experiments";
+    if (open) $("diffText").scrollIntoView({ behavior: "smooth", block: "start" });
+  });
+
+  syncDeadline();
+  showClear();
+  render();
+})();
+</script>
+
+</body></html>
